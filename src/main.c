@@ -1,5 +1,5 @@
 #include <math.h>
 
-double ffiLog(int num) {
-    return log(num);
+double my_log(double x) {
+  return log(x);
 }

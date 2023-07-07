@@ -35,20 +35,22 @@ function setup(board, callback) {
 
 function readAdc(board) {
   let reading = ADC.read(board.thermistor);
-  print('ADC raw reading: ', reading);
+  print('ADC raw reading jabroni: ', reading);
   let voltage = 3.3 * reading / 255;
-  let resistance = 10000 * voltage / 3.3 - voltage;
-  let log = ffi('int ffiLog(int)');
-  let temperature = 1 / (((log(resistance/10000)) / 3950) + (1 / (273.15 + 25)));
+  let resistance = 10000 * voltage / (3.3 - voltage);
+  let log = ffi('double my_log(double)');
+  let temperature = 1/ (((log(resistance / 10000)) / 3950) + (1 / (273.15 + 25)));
   let celsius = temperature - 273.15;
-  let fahrenheit = (celsius * 1.8) + 32;
+  let fahrenheit = celsius * 1.8 + 32;
   print('Value (C): ', celsius);
-  print('Value (F): '. fahrenheit);
-  return {fahrenheit: fahrenheit, celsius: celsius};
+  print('Value (F): ', fahrenheit);
+  // return {fahrenheit: fahrenheit, celsius: celsius};
 }
 
 setup(board, function() {
-  Timer.set(5000, Timer.REPEAT, readAdc(board));
+  Timer.set(5000, true, function(board) {
+    readAdc(board);
+  }, board);
 });
 
 
