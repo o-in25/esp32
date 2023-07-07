@@ -1,0 +1,50 @@
+# Ignore build output files and directories
+/build/
+/.build/
+
+# Ignore generated firmware files
+/fw.zip
+/firmware/
+
+# Ignore Mongoose OS libraries
+/deps/
+
+# Ignore Mongoose OS toolchain
+/mos
+
+# Ignore device-specific configuration files
+/mgos_config*.yaml
+
+# Ignore editor and IDE specific files
+.vscode/
+.idea/
+*.iml
+
+# Ignore operating system and editor files
+.DS_Store
+Thumbs.db
+
+# Ignore logs and debug output
+/log/
+
+# Ignore user-specific files
+/.env
+/secret.yaml
+/.travis.yml
+
+# Ignore generated documentation
+/docs/
+
+# Ignore any other temporary or generated files
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+
+# Ignore specific files or directories
+# /path/to/file
+# /path/to/directory/
+
+# Node
+/node_modules/

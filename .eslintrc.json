@@ -1,0 +1,122 @@
+{
+    "env": {
+        "browser": true,
+        "es2021": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": "latest"
+    },
+    "globals": {
+        "print": true,
+        "load": true,
+        "die": true,
+        "JSON": true,
+        "Object": true,
+        "chr": true,
+        "mkstr": true,
+        "gc": true,
+        "Timer": true,
+        "Cfg": true,
+        "GPIO": true,
+        "ADC": true,
+        "ffi": true
+    },
+    "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "MemberExpression[property.name='toString']",
+            "message": "Avoid using toString()"
+          },
+          {
+            "selector": "CallExpression[callee.name='parseInt']",
+            "message": "Avoid using parseInt()"
+          },
+          {
+            "selector": "CallExpression[callee.name='parseFloat']",
+            "message": "Avoid using parseFloat()"
+          },
+          {
+            "selector": "CallExpression[callee.name='String']",
+            "message": "Avoid using String()"
+          },
+          {
+            "selector": "ArrowFunctionExpression",
+            "message": "Avoid using arrow functions"
+          },
+          {
+            "selector": "AssignmentExpression[operator='=']",
+            "message": "Avoid using assignment expressions"
+          },
+          {
+            "selector": "NewExpression",
+            "message": "Avoid using the new keyword"
+          },
+          {
+            "selector": "ForOfStatement",
+            "message": "Avoid using for...of loops"
+          },
+          {
+            "selector": "ImportDeclaration",
+            "message": "Avoid using import statements"
+          },
+          {
+            "selector": "ExportNamedDeclaration",
+            "message": "Avoid using export statements"
+          },
+          {
+            "selector": "ExportDefaultDeclaration",
+            "message": "Avoid using default exports"
+          },
+          {
+            "selector": "Property[key.name='get']",
+            "message": "Avoid using getters"
+          },
+          {
+            "selector": "Property[key.name='set']",
+            "message": "Avoid using setters"
+          },
+          {
+            "selector": "Property[key.name='valueOf']",
+            "message": "Avoid using valueOf()"
+          },
+          {
+            "selector": "Property[key.name='prototype']",
+            "message": "Avoid using prototypes"
+          },
+          {
+            "selector": "Property[key.name='constructor']",
+            "message": "Avoid using constructors"
+          },
+          {
+            "selector": "Property[key.name='at']",
+            "message": "Avoid using at() method"
+          },
+          {
+            "selector": "Property[key.name='slice']",
+            "message": "Avoid using slice() method"
+          },
+          {
+            "selector": "Property[key.name='indexOf']",
+            "message": "Avoid using indexOf() method"
+          },
+          {
+            "selector": "BinaryExpression[operator='==']",
+            "message": "Avoid using == operator"
+          },
+          {
+            "selector": "BinaryExpression[operator='!=']",
+            "message": "Avoid using != operator"
+          },
+          {
+            "selector": "VariableDeclaration[declarations.0.kind='const']",
+            "message": "Avoid using const, use let instead"
+          }
+        ],
+        "no-var": "error",
+        "no-const-assign": "error",
+        "semi": "error",
+        "no-console": "error"
+    }
+}

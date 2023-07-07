@@ -1,0 +1,22 @@
+{
+  "name": "app1",
+  "version": "1.0.0",
+  "description": "This is the JS demo Mongoose OS app. It gets installed by default at\r [Mongoose OS installation step](https://mongoose-os.com/docs/). It has\r a lot of functionality enabled - cloud integrations, JavaScript engine, etc.\r Its main purpose is to demonstrate the capabilities of Mongoose OS.",
+  "main": "./fs/init.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mongoose-os-apps/demo-js.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mongoose-os-apps/demo-js/issues"
+  },
+  "homepage": "https://github.com/mongoose-os-apps/demo-js#readme",
+  "devDependencies": {
+    "eslint": "^8.44.0"
+  }
+}
