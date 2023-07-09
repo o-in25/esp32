@@ -15,7 +15,8 @@ Config set (LED GPIO 5 example)
 
 ```mos config-set board.led=5```
 
-Build and rebbot JavaScript"
+Build and rebbot JavaScript
+
 ```mos put fs/init.js && mos call Sys.Reboot```
 
 Commands:

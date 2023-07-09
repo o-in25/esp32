@@ -16,7 +16,7 @@ let board = {
     TEMPERATURE_NOMINAL: 20,
     SECOND_IN_MS: 1000,
     MINUTE_IN_MS: 60000,
-    MAX_BUFFER_SIZE: 100
+    MAX_BUFFER_SIZE: 1000
   },
   devices: {},
   buffer: [],
@@ -55,6 +55,7 @@ function onSetup(board, callback) {
 
   // run callback
   print('board initialized, running callback...');
+
   callback(board);
 }
 
@@ -78,34 +79,39 @@ function readAnalog(board) {
 }
 
 function readDigital(board) {
-  let celsius = board.devices.dht.getTemp();
+  let celsius = board.devices.dht.getTemp() || 0;
+  let humidity = board.devices.dht.getHumidity() || 0;
   let fahrenheit = (celsius * 1.8) + 32;
   return {
-    temperature: fahrenheit
+    temperature: fahrenheit,
+    humidity: humidity
   };
 }
 
 function mqttPublish(clientId, data) {
-  print('Client ID ', clientId);
   let topic = '/losant/' + clientId + '/state';
   let message = JSON.stringify({ data: data });
   let result = MQTT.pub(topic, message, 1);
   print(result? 'MQTT message published' : 'MQTT message failed to publish');
-
 }
 
 onSetup(board, function() {
+  // set up mqtt subscription
+  let topic = '/losant/' + board.credentials.clientId + '/command';
+  MQTT.sub(topic, function(connection, topic, message) {
+    print('MQTT message: ', message);
+  }, null);
+
   // read dht every 10 min
   Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
     let reading = readDigital(board);
-    if(reading && reading.temperature) {
-      print('Digital reading (F): ', reading.temperature);
-      mqttPublish(board.credentials.clientId, reading.temperature);
+    if(reading && reading.temperature || reading.humidity) {
+      mqttPublish(board.credentials.clientId, { digitalTemperature: reading.temperature, humidity: reading.humidity});
     }
   }, board);
 
-  // read thermistor every 3 seconds
-  Timer.set(board.constants.SECOND_IN_MS * 3, true, function(board) {
+  // read thermistor every sec
+  Timer.set(board.constants.SECOND_IN_MS, true, function(board) {
     let reading = readAnalog(board);
     if(reading && reading.temperature) {
       print('Analog reading (F): ', reading.temperature);
@@ -115,8 +121,8 @@ onSetup(board, function() {
     }
   }, board);
 
-  // read buufer every 5 minutes
-  Timer.set(board.constants.MINUTE_IN_MS * 5, true, function(board) {
+  // read buffer every 10 min
+  Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
     if(board.buffer.length) {
       let sum = 0;
       for(let i = 0; i < board.buffer.length; i++) {
@@ -124,7 +130,9 @@ onSetup(board, function() {
       }
       sum /= board.buffer.length;
       if(sum) {
-        mqttPublish(board.credentials.clientId, sum);
+        print('Buffer size: ', board.buffer.length);
+        mqttPublish(board.credentials.clientId, { analogTemperature: sum });
+        board.buffer = [];
       }
     }
   }, board);
