@@ -20,7 +20,9 @@
         "Cfg": true,
         "GPIO": true,
         "ADC": true,
-        "ffi": true
+        "ffi": true,
+        "DHT": true,
+        "MQTT": true
     },
     "rules": {
         "no-restricted-syntax": [
