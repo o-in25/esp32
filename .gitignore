@@ -48,3 +48,6 @@ Thumbs.db
 
 # Node
 /node_modules/
+
+# Mis
+*commands.txt

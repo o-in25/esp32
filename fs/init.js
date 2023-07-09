@@ -9,34 +9,40 @@ load('api_adc.js');
 
 let board = {
   id: Cfg.get('board.id'),
-  led: Cfg.get('board.led'),
-  dht11: Cfg.get('board.dht11'),
-  thermistor: Cfg.get('board.thermistor'),
   constants: {
     ESP32_MAX_ADC: 4095,
     THERMISTOR_COEFFICENT: 3950,
     THERMISTOR_NOMINAL: 10000,
-    TEMPERATURE_NOMINAL: 20
+    TEMPERATURE_NOMINAL: 20,
+    SECOND_IN_MS: 1000,
+    MINUTE_IN_MS: 60000,
+    MAX_BUFFER_SIZE: 100
   },
   devices: {},
+  buffer: [],
+  pins: {
+    led: Cfg.get('board.led'),
+    dht11: Cfg.get('board.dht11'),
+    thermistor: Cfg.get('board.thermistor'),
+  },
   credentials: {
     clientId: Cfg.get('mqtt.client_id')
   }
 };
 
-function setup(board, callback) {
+function onSetup(board, callback) {
   // diagnostics
   print('Device ID: ', board.id);
-  print('Thermistor pin: ', board.thermistor);
-  print('DHT-11 pin: ', board.dht11);
-  print('LED pin: ', board.led);
+  print('Thermistor pin: ', board.pins.thermistor);
+  print('DHT-11 pin: ', board.pins.dht11);
+  print('LED pin: ', board.pins.led);
 
   // set blinking light
-  GPIO.set_mode(board.led, GPIO.MODE_OUTPUT);
-  GPIO.blink(board.led, 1000, 1000);
+  GPIO.set_mode(board.pins.led, GPIO.MODE_OUTPUT);
+  GPIO.blink(board.pins.led, 1000, 1000);
 
   // set up adc
-  let adcEnabled = ADC.enable(board.thermistor) === 1;
+  let adcEnabled = ADC.enable(board.pins.thermistor) === 1;
   print('ADC enabled: ', adcEnabled);
 
   // check up mqtt
@@ -44,7 +50,7 @@ function setup(board, callback) {
   print('MQTT connected: ', mqtConnected);
 
   // create dht
-  let dht = DHT.create(board.dht11, DHT.DHT11);
+  let dht = DHT.create(board.pins.dht11, DHT.DHT11);
   board.devices.dht = dht;
 
   // run callback
@@ -53,40 +59,33 @@ function setup(board, callback) {
 }
 
 function readAnalog(board) {
-  let reading = ADC.read(board.thermistor);
+  let reading = ADC.read(board.pins.thermistor);
   print('ADC from thermistor: ', reading);
   reading = (board.constants.ESP32_MAX_ADC / reading)  - 1;
   reading = 10000 / reading; // 10k ohms
-  // print('Thermistor resistance: ', reading);
+  print('Thermistor resistance: ', reading);
   let temperature = reading / board.constants.THERMISTOR_NOMINAL;
   temperature = Math.log(temperature);
   temperature /= board.constants.THERMISTOR_COEFFICENT;
   temperature += 1.0 / (board.constants.TEMPERATURE_NOMINAL + 273.15);
   temperature = 1 / temperature;
   let celsius = temperature - 273.15;
-  // celsius = Math.round(celsius);
-  print('Analog temperature (C): ', celsius);
   let fahrenheit = (celsius * 1.8) + 32;
-  // fahrenheit = Math.round(fahrenheit);
-  print('Analog temperature (F): ', fahrenheit);
-
-  return { celsius: celsius, fahrenheit: fahrenheit };
+  return {
+    temperature: fahrenheit
+  };
 
 }
 
 function readDigital(board) {
-  let dht = DHT.create(board.dht11, DHT.DHT11);
-  let celsius = dht.getTemp();
-  // celsius = Math.round(celsius);
-  print('Digital temperature (C): ', celsius);
+  let celsius = board.devices.dht.getTemp();
   let fahrenheit = (celsius * 1.8) + 32;
-  // fahrenheit = Math.round(fahrenheit);
-  print('Digital temperature (F): ', fahrenheit);
-
-  return { celsius: celsius, fahrenheit: fahrenheit };
+  return {
+    temperature: fahrenheit
+  };
 }
 
-function publish(clientId, data) {
+function mqttPublish(clientId, data) {
   print('Client ID ', clientId);
   let topic = '/losant/' + clientId + '/state';
   let message = JSON.stringify({ data: data });
@@ -95,29 +94,42 @@ function publish(clientId, data) {
 
 }
 
-setup(board, function() {
-  Timer.set(600000, true, function(board) {
-    let data = {};
-    let analogTemperature = readAnalog(board);
-    let digitalTemperature = readDigital(board);
-
-    if(analogTemperature.celsius || analogTemperature.fahrenheit) {
-      data.analogTemperature = analogTemperature.fahrenheit;
+onSetup(board, function() {
+  // read dht every 10 min
+  Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
+    let reading = readDigital(board);
+    if(reading && reading.temperature) {
+      print('Digital reading (F): ', reading.temperature);
+      mqttPublish(board.credentials.clientId, reading.temperature);
     }
-
-    if(digitalTemperature.celsius || digitalTemperature.fahrenheit) {
-      data.digitalTemperature = digitalTemperature.fahrenheit;
-    }
-
-    if(data.analogTemperature || data.digitalTemperature) {
-      publish(board.credentials.clientId, data);
-    }
-
-    data = {};
-    analogTemperature = 0;
-    digitalTemperature = 0;
-
   }, board);
+
+  // read thermistor every 3 seconds
+  Timer.set(board.constants.SECOND_IN_MS * 3, true, function(board) {
+    let reading = readAnalog(board);
+    if(reading && reading.temperature) {
+      print('Analog reading (F): ', reading.temperature);
+      if(board.buffer.length < board.constants.MAX_BUFFER_SIZE) {
+        board.buffer.push(reading.temperature);
+      }
+    }
+  }, board);
+
+  // read buufer every 5 minutes
+  Timer.set(board.constants.MINUTE_IN_MS * 5, true, function(board) {
+    if(board.buffer.length) {
+      let sum = 0;
+      for(let i = 0; i < board.buffer.length; i++) {
+        sum += board.buffer[i];
+      }
+      sum /= board.buffer.length;
+      if(sum) {
+        mqttPublish(board.credentials.clientId, sum);
+      }
+    }
+  }, board);
+
+
 });
 
 
