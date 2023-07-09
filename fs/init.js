@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 load('api_gpio.js');
 load('api_dht.js');
 load('api_timer.js');
@@ -10,7 +11,13 @@ let board = {
   id: Cfg.get('board.id'),
   led: Cfg.get('board.led'),
   dht11: Cfg.get('board.dht11'),
-  thermistor: Cfg.get('board.thermistor')
+  thermistor: Cfg.get('board.thermistor'),
+  constants: {
+    ESP32_MAX_ADC: 4095,
+    THERMISTOR_COEFFICENT: 3950,
+    THERMISTOR_NOMINAL: 10000,
+    TEMPERATURE_NOMINAL: 20
+  }
 };
 
 function setup(board, callback) {
@@ -27,6 +34,7 @@ function setup(board, callback) {
   // set up adc
   let adcEnabled = ADC.enable(board.thermistor) === 1;
   print('ADC enabled: ', adcEnabled);
+  print('ESP32 max ADC size: ', board.constants.ESP32_MAX_ADC);
 
   // run callback
   print('board initialized, running callback...');
@@ -35,20 +43,25 @@ function setup(board, callback) {
 
 function readAdc(board) {
   let reading = ADC.read(board.thermistor);
-  print('ADC raw reading jabroni: ', reading);
-  let voltage = 3.3 * reading / 255;
-  let resistance = 10000 * voltage / (3.3 - voltage);
-  let log = ffi('double my_log(double)');
-  let temperature = 1/ (((log(resistance / 10000)) / 3950) + (1 / (273.15 + 25)));
+  if(reading <= 0) {
+    return;
+  }
+
+  print('ADC from thermistor: ', reading);
+  reading = (board.constants.ESP32_MAX_ADC / reading)  - 1;
+  reading = 10000 / reading; // 10k ohms
+  print('Thermistor resistance: ', reading);
+  let temperature = reading / board.constants.THERMISTOR_NOMINAL;
+  temperature = Math.log(temperature);
+  temperature /= board.constants.THERMISTOR_COEFFICENT;
+  temperature += 1.0 / (board.constants.TEMPERATURE_NOMINAL + 273.15);
+  temperature = 1 / temperature;
   let celsius = temperature - 273.15;
-  let fahrenheit = celsius * 1.8 + 32;
-  print('Value (C): ', celsius);
-  print('Value (F): ', fahrenheit);
-  // return {fahrenheit: fahrenheit, celsius: celsius};
+  print('Temperature (C): ', celsius);
 }
 
 setup(board, function() {
-  Timer.set(5000, true, function(board) {
+  Timer.set(1000, true, function(board) {
     readAdc(board);
   }, board);
 });
