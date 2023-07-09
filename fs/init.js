@@ -58,6 +58,8 @@ function readAdc(board) {
   temperature = 1 / temperature;
   let celsius = temperature - 273.15;
   print('Temperature (C): ', celsius);
+  let fahrenheit = (celsius * 1.8) + 32;
+  print('Temperature (F): ', fahrenheit);
 }
 
 setup(board, function() {
