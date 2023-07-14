@@ -122,7 +122,7 @@ onSetup(board, function() {
   }, board);
 
   // read buffer every 10 min
-  Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
+  Timer.set(board.constants.MINUTE_IN_MS, true, function(board) {
     if(board.buffer.length) {
       let sum = 0;
       for(let i = 0; i < board.buffer.length; i++) {
@@ -131,7 +131,7 @@ onSetup(board, function() {
       sum /= board.buffer.length;
       if(sum) {
         print('Buffer size: ', board.buffer.length);
-        mqttPublish(board.credentials.clientId, { analogTemperature: sum });
+        mqttPublish(board.credentials.clientId, { analogTemperature: sum, bufferSize: board.buffer.length});
         board.buffer = [];
       }
     }
