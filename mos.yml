@@ -15,7 +15,10 @@ config_schema:
   - ["mqtt.ssl_ca_cert", "ca.pem"]
   - ["board", "o"]
   - ["board.id", "s", "649f1f4384cee3a496715612", {title: "Device ID"}]
-  - ["board.led", "i", 5, {title: "Basic LED"}]
+  - ["board.button", "i", 5, {title: "Basic button"}]
+  - ["board.rgb.r", "i", 12, {title: "RGB LED (R)"}]
+  - ["board.rgb.g", "i", 13, {title: "RGB LED (G)"}]
+  - ["board.rgb.b", "i", 15, {title: "RGB LED (B)"}]
   - ["board.dht11", "i", 25, {title: "DHT 11 temperature/humidity sensor"}]
   - ["board.thermistor", "i", 36, {title: "Thermistor"}]
 
@@ -45,6 +48,7 @@ libs:
   - origin: https://github.com/mongoose-os-libs/core
   - origin: https://github.com/mongoose-os-libs/wifi
   - origin: https://github.com/mongoose-os-libs/dht
+  - origin: https://github.com/mongoose-os-libs/pwm
 
 conds:
   - when: mos.platform == "esp32"

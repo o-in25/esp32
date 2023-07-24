@@ -6,6 +6,8 @@ load('api_config.js');
 load('api_mqtt.js');
 load('api_sys.js');
 load('api_adc.js');
+load('api_http.js');
+load('api_pwm.js');
 
 let board = {
   id: Cfg.get('board.id'),
@@ -16,30 +18,37 @@ let board = {
     TEMPERATURE_NOMINAL: 20,
     SECOND_IN_MS: 1000,
     MINUTE_IN_MS: 60000,
-    MAX_BUFFER_SIZE: 1000
+    RGB_FREQUENCY: 1000
   },
   devices: {},
   buffer: [],
   pins: {
-    led: Cfg.get('board.led'),
+    button: Cfg.get('board.button'),
+    rgb: {
+      r: Cfg.get('board.rgb.r'),
+      g: Cfg.get('board.rgb.g'),
+      b: Cfg.get('board.rgb.b')
+    },
     dht11: Cfg.get('board.dht11'),
-    thermistor: Cfg.get('board.thermistor'),
+    thermistor: Cfg.get('board.thermistor')
   },
   credentials: {
     clientId: Cfg.get('mqtt.client_id')
+  },
+  colors: {
+    
   }
 };
 
-function onSetup(board, callback) {
-  // diagnostics
+let hexToDecimal = ffi("int hexToDecimal(char*)");
+
+function onSetup(callback) {
+  print('setting up board...');
   print('Device ID: ', board.id);
   print('Thermistor pin: ', board.pins.thermistor);
   print('DHT-11 pin: ', board.pins.dht11);
-  print('LED pin: ', board.pins.led);
-
-  // set blinking light
-  GPIO.set_mode(board.pins.led, GPIO.MODE_OUTPUT);
-  GPIO.blink(board.pins.led, 1000, 1000);
+  print('LED RGB pin: ', JSON.stringify(board.pins.rgb));
+  GPIO.set_button_handler(board.pins.button, GPIO.PULL_DOWN, GPIO.INT_EDGE_NEG, 200, onButtonPress, {name: "fal"});
 
   // set up adc
   let adcEnabled = ADC.enable(board.pins.thermistor) === 1;
@@ -54,17 +63,14 @@ function onSetup(board, callback) {
   board.devices.dht = dht;
 
   // run callback
-  print('board initialized, running callback...');
-
+  print('set up done, running callback...');
   callback(board);
 }
 
 function readAnalog(board) {
   let reading = ADC.read(board.pins.thermistor);
-  print('ADC from thermistor: ', reading);
   reading = (board.constants.ESP32_MAX_ADC / reading)  - 1;
   reading = 10000 / reading; // 10k ohms
-  print('Thermistor resistance: ', reading);
   let temperature = reading / board.constants.THERMISTOR_NOMINAL;
   temperature = Math.log(temperature);
   temperature /= board.constants.THERMISTOR_COEFFICENT;
@@ -72,9 +78,7 @@ function readAnalog(board) {
   temperature = 1 / temperature;
   let celsius = temperature - 273.15;
   let fahrenheit = (celsius * 1.8) + 32;
-  return {
-    temperature: fahrenheit
-  };
+  return fahrenheit;
 
 }
 
@@ -95,49 +99,48 @@ function mqttPublish(clientId, data) {
   print(result? 'MQTT message published' : 'MQTT message failed to publish');
 }
 
-onSetup(board, function() {
-  // set up mqtt subscription
-  let topic = '/losant/' + board.credentials.clientId + '/command';
-  MQTT.sub(topic, function(connection, topic, message) {
-    print('MQTT message: ', message);
-  }, null);
 
-  // read dht every 10 min
-  Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
+function onButtonPress(data, args) {
+  print('YOOOOOOOOOOOO', args);
+
+}
+
+function hexToRgb(hex) {
+  if(hex.charCodeAt(0) === 35) {
+    hex = hex.slice(1, hex.length);
+  }
+  let red = hex.slice(0, 2);
+  red = hexToDecimal(red);
+  let green = hex.slice(2, 4);
+  green = hexToDecimal(green);
+  let blue = hex.slice(4, 6);
+  blue = hexToDecimal(blue);
+  return {
+    r: red,
+    g: green,
+    b: blue
+  };
+}
+
+function setRgbLed(board, hex) {
+  let rgb = hexToRgb(hex);
+  PWM.set(board.pins.rgb.r, board.constants.RGB_FREQUENCY, rgb.r / 255);
+  PWM.set(board.pins.rgb.g, board.constants.RGB_FREQUENCY, rgb.g / 255);
+  PWM.set(board.pins.rgb.b, board.constants.RGB_FREQUENCY, rgb.b / 255);
+}
+
+onSetup(function(board) {
+  setRgbLed(board, '#00FF00');
+  Timer.set(board.constants.SECOND_IN_MS * 30, true, function(board) {
     let reading = readDigital(board);
-    if(reading && reading.temperature || reading.humidity) {
-      mqttPublish(board.credentials.clientId, { digitalTemperature: reading.temperature, humidity: reading.humidity});
-    }
+    let message = {};
+    message.digitalTemperature = reading.temperature || 0;
+    message.humidity = reading.humidity || 0;
+    print('Digital temperature: ', message.digitalTemperature);
+    print('Humidity: ', message.humidity);
+    reading = readAnalog(board);
+    message.analogTemperature = reading || 0;
+    print('Analog temperature: ', reading || 0);
+    mqttPublish(board.credentials.clientId, message);
   }, board);
-
-  // read thermistor every sec
-  Timer.set(board.constants.SECOND_IN_MS, true, function(board) {
-    let reading = readAnalog(board);
-    if(reading && reading.temperature) {
-      print('Analog reading (F): ', reading.temperature);
-      if(board.buffer.length < board.constants.MAX_BUFFER_SIZE) {
-        board.buffer.push(reading.temperature);
-      }
-    }
-  }, board);
-
-  // read buffer every 10 min
-  Timer.set(board.constants.MINUTE_IN_MS, true, function(board) {
-    if(board.buffer.length) {
-      let sum = 0;
-      for(let i = 0; i < board.buffer.length; i++) {
-        sum += board.buffer[i];
-      }
-      sum /= board.buffer.length;
-      if(sum) {
-        print('Buffer size: ', board.buffer.length);
-        mqttPublish(board.credentials.clientId, { analogTemperature: sum, bufferSize: board.buffer.length});
-        board.buffer = [];
-      }
-    }
-  }, board);
-
-
 });
-
-

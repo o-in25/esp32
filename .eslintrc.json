@@ -18,6 +18,7 @@
         "gc": true,
         "Timer": true,
         "Cfg": true,
+        "PWM": true,
         "GPIO": true,
         "ADC": true,
         "ffi": true,
