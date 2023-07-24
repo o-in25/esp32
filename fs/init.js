@@ -43,12 +43,15 @@ let board = {
 let hexToDecimal = ffi("int hexToDecimal(char*)");
 
 function onSetup(callback) {
-  print('setting up board...');
   print('Device ID: ', board.id);
   print('Thermistor pin: ', board.pins.thermistor);
   print('DHT-11 pin: ', board.pins.dht11);
   print('LED RGB pin: ', JSON.stringify(board.pins.rgb));
-  GPIO.set_button_handler(board.pins.button, GPIO.PULL_DOWN, GPIO.INT_EDGE_NEG, 200, onButtonPress, {name: "fal"});
+  print('setting up board...');
+  setRgbLed(board, '#0000FF');
+
+  // set button handler
+  GPIO.set_button_handler(board.pins.button, GPIO.PULL_DOWN, GPIO.INT_EDGE_NEG, 200, onButtonPress, board);
 
   // set up adc
   let adcEnabled = ADC.enable(board.pins.thermistor) === 1;
@@ -62,9 +65,16 @@ function onSetup(callback) {
   let dht = DHT.create(board.pins.dht11, DHT.DHT11);
   board.devices.dht = dht;
 
+  // set output
+  // GPIO.set_mode(board.pins.rgb.r, GPIO.MODE_OUTPUT);
+
   // run callback
   print('set up done, running callback...');
+  Timer.set(board.constants.SECOND_IN_MS * 3, false, function(board) {
+    setRgbLed(board, '#00FF00');
+  }, board);
   callback(board);
+
 }
 
 function readAnalog(board) {
@@ -99,12 +109,6 @@ function mqttPublish(clientId, data) {
   print(result? 'MQTT message published' : 'MQTT message failed to publish');
 }
 
-
-function onButtonPress(data, args) {
-  print('YOOOOOOOOOOOO', args);
-
-}
-
 function hexToRgb(hex) {
   if(hex.charCodeAt(0) === 35) {
     hex = hex.slice(1, hex.length);
@@ -129,18 +133,36 @@ function setRgbLed(board, hex) {
   PWM.set(board.pins.rgb.b, board.constants.RGB_FREQUENCY, rgb.b / 255);
 }
 
+function getState(board) {
+  let reading = readDigital(board);
+  let data = {};
+  data.digitalTemperature = reading.temperature || 0;
+  data.humidity = reading.humidity || 0;
+  print('Digital temperature: ', data.digitalTemperature);
+  print('Humidity: ', data.humidity);
+  reading = readAnalog(board);
+  data.analogTemperature = reading || 0;
+  print('Analog temperature: ', reading || 0);
+  return data;
+}
+
+function reportState(board) {
+  let message = getState(board);
+  mqttPublish(board.credentials.clientId, message);
+  setRgbLed(board, '#FF0000');
+  Timer.set(board.constants.SECOND_IN_MS * 3, false, function() {
+    setRgbLed(board, '#00FF00');
+  }, null);
+}
+
+function onButtonPress(pin, board) {
+  print('button pressed on pin: ', pin);
+  reportState(board);
+}
+
 onSetup(function(board) {
-  setRgbLed(board, '#00FF00');
   Timer.set(board.constants.SECOND_IN_MS * 30, true, function(board) {
-    let reading = readDigital(board);
-    let message = {};
-    message.digitalTemperature = reading.temperature || 0;
-    message.humidity = reading.humidity || 0;
-    print('Digital temperature: ', message.digitalTemperature);
-    print('Humidity: ', message.humidity);
-    reading = readAnalog(board);
-    message.analogTemperature = reading || 0;
-    print('Analog temperature: ', reading || 0);
-    mqttPublish(board.credentials.clientId, message);
+    reportState(board);
   }, board);
+
 });
