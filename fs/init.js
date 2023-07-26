@@ -8,50 +8,17 @@ load('api_sys.js');
 load('api_adc.js');
 load('api_http.js');
 load('api_pwm.js');
-
-let board = {
-  id: Cfg.get('board.id'),
-  constants: {
-    ESP32_MAX_ADC: 4095,
-    THERMISTOR_COEFFICENT: 3950,
-    THERMISTOR_NOMINAL: 10000,
-    TEMPERATURE_NOMINAL: 20,
-    SECOND_IN_MS: 1000,
-    MINUTE_IN_MS: 60000,
-    RGB_FREQUENCY: 1000
-  },
-  devices: {},
-  buffer: [],
-  pins: {
-    button: Cfg.get('board.button'),
-    rgb: {
-      r: Cfg.get('board.rgb.r'),
-      g: Cfg.get('board.rgb.g'),
-      b: Cfg.get('board.rgb.b')
-    },
-    dht11: Cfg.get('board.dht11'),
-    thermistor: Cfg.get('board.thermistor')
-  },
-  credentials: {
-    clientId: Cfg.get('mqtt.client_id')
-  },
-  colors: {
-    
-  }
-};
-
 let hexToDecimal = ffi("int hexToDecimal(char*)");
 
-function onSetup(callback) {
+function onSetup(board, callback) {
   print('Device ID: ', board.id);
   print('Thermistor pin: ', board.pins.thermistor);
   print('DHT-11 pin: ', board.pins.dht11);
   print('LED RGB pin: ', JSON.stringify(board.pins.rgb));
   print('setting up board...');
-  setRgbLed(board, '#0000FF');
 
   // set button handler
-  GPIO.set_button_handler(board.pins.button, GPIO.PULL_DOWN, GPIO.INT_EDGE_NEG, 200, onButtonPress, board);
+  GPIO.set_button_handler(board.pins.button, GPIO.PULL_UP, GPIO.INT_EDGE_NEG, 200, onButtonPress, board);
 
   // set up adc
   let adcEnabled = ADC.enable(board.pins.thermistor) === 1;
@@ -65,17 +32,68 @@ function onSetup(callback) {
   let dht = DHT.create(board.pins.dht11, DHT.DHT11);
   board.devices.dht = dht;
 
-  // set output
-  // GPIO.set_mode(board.pins.rgb.r, GPIO.MODE_OUTPUT);
-
   // run callback
   print('set up done, running callback...');
-  Timer.set(board.constants.SECOND_IN_MS * 3, false, function(board) {
-    setRgbLed(board, '#00FF00');
-  }, board);
+  rgbBlink(board, board.colors.blue, 10);
   callback(board);
-
 }
+
+// hex to rgb helper
+function hexToRgb(hex) {
+  if(hex.charCodeAt(0) === 35) {
+    hex = hex.slice(1, hex.length);
+  }
+  let red = hex.slice(0, 2);
+  red = hexToDecimal(red);
+  let green = hex.slice(2, 4);
+  green = hexToDecimal(green);
+  let blue = hex.slice(4, 6);
+  blue = hexToDecimal(blue);
+  return {
+    r: red,
+    g: green,
+    b: blue
+  };
+}
+
+// uses pwm to set rgb to hex
+function setRgbLed(pins, hex) {
+  let rgb = hexToRgb(hex);
+  // PWM.set(board.pins.rgb.r, board.constants.RGB_FREQUENCY, rgb.r / 255);
+  // PWM.set(board.pins.rgb.g, board.constants.RGB_FREQUENCY, rgb.g / 255);
+  // PWM.set(board.pins.rgb.b, board.constants.RGB_FREQUENCY, rgb.b / 255);
+  PWM.set(pins[0], 1000, rgb.r / 255);
+  PWM.set(pins[1], 1000, rgb.g / 255);
+  PWM.set(pins[2], 1000, rgb.b / 255);
+}
+
+// sets the color of the rgb status light for n seconds, then reverts back to red
+function rgbBlink(board, hex, seconds) {
+  let pins = [
+    board.pins.rgb.r,
+    board.pins.rgb.g,
+    board.pins.rgb.b,
+  ];
+  setRgbLed(pins, hex);
+  let params = {board: board, pins: pins};
+  Timer.set(board.constants.SECOND_IN_MS * seconds, false, function(params) {
+    setRgbLed(params.pins, params.board.colors.green);
+  }, params);
+}
+
+function reportState(clientId, data) {
+  let topic = '/losant/' + clientId + '/state';
+  let message = JSON.stringify({ data: data });
+  let result = MQTT.pub(topic, message, 1);
+  print(result? 'MQTT message published' : 'MQTT message failed to publish');
+}
+
+function mqttPublish(topic, data) {
+  let message = JSON.stringify({ data: data });
+  let result = MQTT.pub(topic, message, 1);
+  print(result? 'MQTT message published' : 'MQTT message failed to publish');
+}
+
 
 function readAnalog(board) {
   let reading = ADC.read(board.pins.thermistor);
@@ -102,38 +120,7 @@ function readDigital(board) {
   };
 }
 
-function mqttPublish(clientId, data) {
-  let topic = '/losant/' + clientId + '/state';
-  let message = JSON.stringify({ data: data });
-  let result = MQTT.pub(topic, message, 1);
-  print(result? 'MQTT message published' : 'MQTT message failed to publish');
-}
-
-function hexToRgb(hex) {
-  if(hex.charCodeAt(0) === 35) {
-    hex = hex.slice(1, hex.length);
-  }
-  let red = hex.slice(0, 2);
-  red = hexToDecimal(red);
-  let green = hex.slice(2, 4);
-  green = hexToDecimal(green);
-  let blue = hex.slice(4, 6);
-  blue = hexToDecimal(blue);
-  return {
-    r: red,
-    g: green,
-    b: blue
-  };
-}
-
-function setRgbLed(board, hex) {
-  let rgb = hexToRgb(hex);
-  PWM.set(board.pins.rgb.r, board.constants.RGB_FREQUENCY, rgb.r / 255);
-  PWM.set(board.pins.rgb.g, board.constants.RGB_FREQUENCY, rgb.g / 255);
-  PWM.set(board.pins.rgb.b, board.constants.RGB_FREQUENCY, rgb.b / 255);
-}
-
-function getState(board) {
+function readTemperatures(board) {
   let reading = readDigital(board);
   let data = {};
   data.digitalTemperature = reading.temperature || 0;
@@ -146,23 +133,58 @@ function getState(board) {
   return data;
 }
 
-function reportState(board) {
-  let message = getState(board);
-  mqttPublish(board.credentials.clientId, message);
-  setRgbLed(board, '#FF0000');
-  Timer.set(board.constants.SECOND_IN_MS * 3, false, function() {
-    setRgbLed(board, '#00FF00');
-  }, null);
-}
 
+
+/*
+btn
+*/
 function onButtonPress(pin, board) {
   print('button pressed on pin: ', pin);
-  reportState(board);
+  let reading = readTemperatures(board);
+  // let message = JSON.stringify({ data: reading });
+  print(reading);
+  print('Connected?', MQTT.isConnected());
+  mqttPublish('sensors/lights/button', reading);
+  rgbBlink(board, board.colors.red, 0);
+
 }
 
-onSetup(function(board) {
-  Timer.set(board.constants.SECOND_IN_MS * 30, true, function(board) {
-    reportState(board);
+onSetup({
+  id: Cfg.get('board.id'),
+  constants: {
+    ESP32_MAX_ADC: 4095,
+    THERMISTOR_COEFFICENT: 3950,
+    THERMISTOR_NOMINAL: 10000,
+    TEMPERATURE_NOMINAL: 20,
+    SECOND_IN_MS: 1000,
+    MINUTE_IN_MS: 60000,
+    RGB_FREQUENCY: 1000
+  },
+  devices: {},
+  buffer: [],
+  pins: {
+    button: Cfg.get('board.button'),
+    rgb: {
+      r: Cfg.get('board.rgb.r'),
+      g: Cfg.get('board.rgb.g'),
+      b: Cfg.get('board.rgb.b')
+    },
+    dht11: Cfg.get('board.dht11'),
+    thermistor: Cfg.get('board.thermistor')
+  },
+  credentials: {
+    clientId: Cfg.get('mqtt.client_id')
+  },
+  colors: {
+    blue: '#0000FF',
+    green: '#00FF00',
+    red: '#FF0000'
+  }
+}, function(board) {
+  Timer.set(board.constants.MINUTE_IN_MS * 10, true, function(board) {
+    // publish temp readinsg
+    let readings = readTemperatures(board);
+    reportState(board.credentials.clientId, readings);
+    rgbBlink(board, board.colors.red, 3);
   }, board);
-
 });
